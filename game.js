@@ -277,20 +277,20 @@
     function sfx(name) {
       if (!G.sound) return;
       switch (name) {
-        case 'tick': beep(720, 0.03, 'square', 0.025); break;
-        case 'select': beep(460, 0.07, 'square', 0.05, 130); break;
-        case 'place': beep(210, 0.09, 'triangle', 0.075, 80); noise(0.07, 0.035, 800); break;
-        case 'move': beep(340, 0.07, 'square', 0.055, 130); noise(0.06, 0.03, 600); break;
-        case 'bad': beep(150, 0.16, 'sawtooth', 0.06, -50); break;
-        case 'turn': beep(620, 0.045, 'square', 0.025); break;
-        case 'win': [523, 659, 784, 1046, 1318].forEach((f, i) => setTimeout(() => beep(f, 0.12, 'square', 0.055), i * 85)); break;
-        case 'lose': [330, 277, 220, 165].forEach((f, i) => setTimeout(() => beep(f, 0.16, 'triangle', 0.06), i * 120)); break;
-        case 'pop': beep(880, 0.055, 'square', 0.055, -420); noise(0.05, 0.04, 2400); break;
-        case 'strip': noise(0.15, 0.055, 3000); beep(1100, 0.05, 'square', 0.035, -700); break;
-        case 'run': noise(0.22, 0.05, 900); break;
-        case 'shout': beep(220, 0.42, 'sawtooth', 0.07, 120); noise(0.34, 0.05, 1300); break;
-        case 'start': [262, 330, 392, 523].forEach((f, i) => setTimeout(() => beep(f, 0.1, 'square', 0.05), i * 90)); break;
-        default: beep(620, 0.05, 'square', 0.035); break;
+        case 'tick': beep(760, 0.035, 'square', 0.028); break;
+        case 'select': beep(520, 0.08, 'triangle', 0.06, 150); beep(620, 0.06, 'square', 0.03, 90); break;
+        case 'place': beep(196, 0.11, 'triangle', 0.09, 70); noise(0.09, 0.045, 900); setTimeout(() => beep(262, 0.07, 'square', 0.035, 40), 40); break;
+        case 'move': beep(294, 0.09, 'triangle', 0.08, 110); noise(0.08, 0.04, 700); setTimeout(() => beep(392, 0.06, 'square', 0.032, 60), 32); break;
+        case 'bad': beep(150, 0.16, 'sawtooth', 0.065, -60); break;
+        case 'turn': beep(660, 0.05, 'square', 0.028); break;
+        case 'win': [523, 659, 784, 1046, 1318].forEach((f, i) => setTimeout(() => beep(f, 0.12, 'square', 0.06), i * 85)); break;
+        case 'lose': [330, 277, 220, 165].forEach((f, i) => setTimeout(() => beep(f, 0.16, 'triangle', 0.065), i * 120)); break;
+        case 'pop': beep(880, 0.06, 'square', 0.06, -440); noise(0.06, 0.045, 2500); break;
+        case 'strip': noise(0.16, 0.06, 3200); beep(1100, 0.055, 'square', 0.038, -720); break;
+        case 'run': noise(0.24, 0.055, 950); break;
+        case 'shout': beep(220, 0.44, 'sawtooth', 0.075, 140); noise(0.36, 0.055, 1400); break;
+        case 'start': [262, 330, 392, 523].forEach((f, i) => setTimeout(() => beep(f, 0.11, 'square', 0.055), i * 90)); break;
+        default: beep(620, 0.055, 'square', 0.038); break;
       }
     }
 
@@ -613,7 +613,7 @@
         return;
       }
       const left = Math.max(0, (endsAt - performance.now()) / 1000);
-      dom.turnClock.textContent = left.toFixed(1);
+      dom.turnClock.textContent = left >= 2 ? Math.ceil(left).toFixed(0) : left.toFixed(1);
       dom.turnClock.classList.toggle('danger', left <= 1);
       if (left <= 0) {
         clearMoveClock();
@@ -953,9 +953,9 @@
       }
       const left = Math.max(0, (state.turnEndsAt - Date.now()) / 1000);
       dom.turnClock.classList.remove('hidden');
-      dom.turnClock.textContent = left.toFixed(1);
+      dom.turnClock.textContent = left >= 2 ? Math.ceil(left).toFixed(0) : left.toFixed(1);
       dom.turnClock.classList.toggle('danger', left <= 1);
-    }, 100);
+    }, 80);
   }
 
   function applyOnlineState(state) {
