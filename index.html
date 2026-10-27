@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101d16">
+  <meta name="description" content="XO CHAI — minigame 2D pixel 1v1 tại TGB Store. ShinV vs BRB, BO3, thua thì cởi đồ chạy ra đường hét thật to.">
+  <title>XO CHAI • TGB Store — ShinV vs BRB</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23101d16'/%3E%3Crect x='9' y='6' width='14' height='21' rx='4' fill='%23f08a3c'/%3E%3Crect x='12' y='3' width='8' height='5' fill='%23f6e5bd'/%3E%3Crect x='11' y='13' width='10' height='7' fill='%23fff5d7'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="stage" aria-label="XO CHAI — TGB Store">
+    <canvas id="game" width="1280" height="720" aria-label="Sân khấu pixel TGB Store. Dùng phím để chơi."></canvas>
+
+    <div id="scanlines" aria-hidden="true"></div>
+    <div id="vignette" aria-hidden="true"></div>
+    <div id="flash" aria-hidden="true"></div>
+    <div id="fade" aria-hidden="true"></div>
+
+    <header id="topbar">
+      <div class="brand-lockup">
+        <span class="brand-badge">TGB</span>
+        <div>
+          <strong>XO CHAI</strong>
+          <small>STORE MINIGAME • 21:47</small>
+        </div>
+      </div>
+      <div class="top-status" id="topStatus">
+        <span class="live-dot"></span>
+        <span id="statusText">ĐANG MỞ CỬA</span>
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn" id="speakerBtn" type="button" title="Loa YouTube — dán link và phát">📻<span>LOA</span></button>
+        <button class="icon-btn" id="soundBtn" type="button" aria-pressed="true" title="Bật/tắt âm thanh">🔊<span>ÂM THANH</span></button>
+        <button class="icon-btn" id="helpBtn" type="button" title="Luật chơi">?<span>LUẬT</span></button>
+        <button class="icon-btn" id="fullscreenBtn" type="button" title="Toàn màn hình">⛶<span>FULL</span></button>
+        <button class="icon-btn danger" id="skipBtn" type="button" title="Bỏ qua đoạn phim">⏭<span>BỎ QUA</span></button>
+      </div>
+    </header>
+
+    <section id="scoreboard" class="hidden" aria-label="Tỷ số BO3">
+      <article class="player-card p1" id="cardShinv">
+        <div class="player-avatar" id="avatarShinv"></div>
+        <div class="player-info">
+          <small>P1 • WASD + E</small>
+          <strong>SHINV</strong>
+          <span>áo đỏ • chai cam</span>
+          <em id="stockShinv">CÒN 3 CHAI</em>
+        </div>
+        <div class="score-pips" id="pipsShinv" aria-label="Số ván thắng"></div>
+      </article>
+      <div class="match-center">
+        <span class="match-rule">BEST OF 3</span>
+        <strong id="roundLabel">VÁN 1</strong>
+        <small id="matchScore">0 — 0</small>
+      </div>
+      <article class="player-card p2" id="cardBrb">
+        <div class="score-pips" id="pipsBrb" aria-label="Số ván thắng"></div>
+        <div class="player-info right">
+          <small>P2 • ↑↓←→ + ENTER</small>
+          <strong>BRB</strong>
+          <span>áo Real • chai đen</span>
+          <em id="stockBrb">CÒN 3 CHAI</em>
+        </div>
+        <div class="player-avatar" id="avatarBrb"></div>
+      </article>
+    </section>
+
+    <div id="turnBanner" class="hidden" aria-live="polite">
+      <span id="turnEyebrow">LƯỢT</span>
+      <div class="turn-title-row"><strong id="turnTitle">SHINV</strong><span id="turnClock" class="turn-clock hidden">3.0</span></div>
+      <span id="turnHint">Chọn ô trống để đặt chai</span>
+    </div>
+
+    <aside id="ruleCard" class="hidden" aria-label="Luật chơi nhanh">
+      <div class="rule-head"><span>LUẬT NHANH</span><button id="ruleToggle" type="button" aria-expanded="true">−</button></div>
+      <div id="ruleBody">
+        <p><b>1.</b> Bàn 3×3, mỗi người <b>3 chai</b>. Đặt lần lượt đến khi đủ 6 chai.</p>
+        <p><b>2.</b> Vào lượt di chuyển: nhấc <b>1 chai</b> sang ô trống <b>kề cạnh</b> — ngang, dọc hoặc chéo. Không nhảy cóc.</p>
+        <p><b>3.</b> Mỗi lượt di chuyển chỉ có <b>3 giây</b>. Hết giờ, đi xa, lặp nước quá 3 lần hoặc bị khóa đường đều <b>thua ván</b>.</p>
+        <p><b>4.</b> Thắng 2 ván là thắng BO3. Người thua bị “tụt đồ” pixel và chạy ra đường hét.</p>
+        <p class="rule-note">Hài hước, không 18+. Không có chi tiết nhạy cảm.</p>
+      </div>
+    </aside>
+
+    <div id="cockpit" class="hidden">
+      <div class="control-pill p1-pill">
+        <span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span>
+        <b>DI CHUYỂN</b>
+        <span class="keycap wide">E</span><b>CHỌN / ĐẶT</b>
+      </div>
+      <div id="contextHint" class="context-hint">Chọn một ô trống trên bàn.</div>
+      <div class="control-pill p2-pill">
+        <span class="keycap">↑</span><span class="keycap">←</span><span class="keycap">↓</span><span class="keycap">→</span>
+        <b>DI CHUYỂN</b>
+        <span class="keycap wide">ENTER</span><b>CHỌN / ĐẶT</b>
+      </div>
+    </div>
+
+    <div id="inventory" class="hidden" aria-label="Chai còn lại">
+      <div class="inv-side p1"><span>SHINV</span><div id="invShinv" class="bottle-row"></div></div>
+      <div id="moveMeter" class="move-meter">LƯỢT <b>1</b></div>
+      <div class="inv-side p2"><span>BRB</span><div id="invBrb" class="bottle-row"></div></div>
+    </div>
+
+    <section id="startScreen" class="screen">
+      <div class="start-frame">
+        <div class="start-kicker">TGB STORE PRESENTS • MỘT VÁN XO KHÔNG BÌNH THƯỜNG</div>
+        <h1><span>XO</span> CHAI</h1>
+        <div class="subtitle">SHINV <i>VS</i> BRB</div>
+        <div class="start-tags">
+          <span>TAPATAN 3×3</span>
+          <span>3 GIÂY / LƯỢT</span>
+          <span>BO3</span>
+          <span>THUA = CHẠY</span>
+        </div>
+        <p class="start-copy">Khách ế. Hai thằng rảnh. Một bàn trắng. Ba chai mỗi đứa.<br>Đi kề cạnh, đập tay, đừng để hết 3 giây.</p>
+        <div class="start-actions">
+          <button id="startBtn" class="btn primary big" type="button">▶ CHƠI LOCAL 1V1</button>
+          <button id="onlineBtn" class="btn online big" type="button">🌐 TÌM TRẬN ONLINE</button>
+          <button id="startSpeakerBtn" class="btn ghost" type="button">📻 LOA YOUTUBE</button>
+          <button id="startHelpBtn" class="btn ghost" type="button">LUẬT CHƠI</button>
+        </div>
+        <div class="start-controls">
+          <div><b>P1 SHINV</b><span>WASD di chuyển • E chọn/đặt</span></div>
+          <div><b>P2 BRB</b><span>←↑↓→ di chuyển • ENTER chọn/đặt</span></div>
+        </div>
+        <div class="start-foot">
+          <span>Chuột/chạm: bấm trực tiếp vào ô của người đang tới lượt.</span>
+          <span>v1.0 • made for SBTC</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="dialogBox" class="dialog hidden" aria-live="polite">
+      <div class="dialog-portrait" id="dialogPortrait"></div>
+      <div class="dialog-content">
+        <div class="dialog-meta"><strong id="dialogSpeaker">SHINV</strong><span id="dialogTag">TGB STORE</span></div>
+        <p id="dialogText"></p>
+        <div class="dialog-actions">
+          <button id="dialogNext" class="btn small primary" type="button">TIẾP ▶</button>
+          <button id="dialogSkip" class="btn small ghost" type="button">BỎ QUA ĐOẠN NÀY</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="roundOverlay" class="overlay hidden">
+      <div class="overlay-card">
+        <span class="eyebrow" id="roundEyebrow">KẾT THÚC VÁN 1</span>
+        <h2 id="roundTitle">SHINV THẮNG!</h2>
+        <p id="roundSub">3 chai cam thẳng hàng. BRB chuẩn bị tinh thần.</p>
+        <div class="overlay-score" id="roundScore">SHINV 1 — 0 BRB</div>
+        <button id="nextRoundBtn" class="btn primary" type="button">VÁN TIẾP ▶</button>
+      </div>
+    </section>
+
+    <section id="resultOverlay" class="overlay hidden">
+      <div class="overlay-card result-card">
+        <span class="eyebrow">KẾT THÚC BO3</span>
+        <h2 id="resultTitle">SHINV THẮNG BO3!</h2>
+        <p id="resultSub">Người thua chuẩn bị nhận hình phạt.</p>
+        <div class="overlay-score" id="resultScore">2 — 1</div>
+        <div id="resultChat" class="result-chat"></div>
+        <div class="overlay-actions">
+          <button id="rematchBtn" class="btn primary" type="button">ĐẤU LẠI BO3</button>
+          <button id="menuBtn" class="btn ghost" type="button">VỀ MENU</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="helpModal" class="overlay hidden">
+      <div class="overlay-card help-card">
+        <span class="eyebrow">HƯỚNG DẪN / LUẬT CHƠI</span>
+        <h2>XO CHAI — không phải XO thường.</h2>
+        <div class="help-grid">
+          <div>
+            <h3>Giai đoạn 1 — Đặt chai</h3>
+            <p>Bàn 3×3 trống. Mỗi người lần lượt đặt 3 chai. Ai tạo được 3 chai thẳng hàng ngay trong giai đoạn này thì thắng ván luôn.</p>
+            <h3>Giai đoạn 2 — Di chuyển</h3>
+            <p>Khi đủ 6 chai, mỗi lượt chỉ được nhấc 1 chai sang ô trống <b>kề cạnh</b> (ngang, dọc, chéo). Không nhảy cóc, không đi xa.</p>
+            <h3>Áp lực 3 giây</h3>
+            <p>Đồng hồ 3 giây chạy ở mỗi lượt di chuyển. Hết giờ hoặc không hạ chai đúng luật: thua ván ngay.</p>
+          </div>
+          <div>
+            <h3>Thua do bị khóa đường</h3>
+            <p>Nếu tới lượt bạn mà cả 3 chai không còn ô trống kề cạnh nào để đi, bạn thua ván.</p>
+            <h3>Luật lặp nước</h3>
+            <p>Không được đảo một chai qua lại giữa cùng 2 ô quá 3 lần liên tiếp. Tái phạm lần thứ 4: thua ván.</p>
+            <h3>BO3 &amp; hình phạt</h3>
+            <p>Thắng 2 ván thắng trận. Người thua bị “tụt đồ” pixel, chạy ra đường hét <i>“TAO LÀ THẰNG BIẾN THÁI”</i>. Hài kịch, không 18+.</p>
+            <p><b>P1:</b> WASD + E. <b>P2:</b> ↑↓←→ + Enter. Có thể bấm/chạm trực tiếp ô.</p>
+          </div>
+        </div>
+        <button id="helpClose" class="btn primary" type="button">ĐÃ HIỂU</button>
+      </div>
+    </section>
+
+    <section id="onlineLobby" class="overlay hidden">
+      <div class="overlay-card online-card">
+        <span class="eyebrow">ONLINE 1VS1 • RANDOM MATCH</span>
+        <h2>TÌM ĐỐI THỦ</h2>
+        <p>Ghép trận ngẫu nhiên với người chơi đang online. Chỉ lưu <b>tên hiển thị</b> lên bảng xếp hạng — không lưu tài khoản, mật khẩu hay email.</p>
+        <label class="online-field">
+          <span>TÊN CỦA BẠN</span>
+          <input id="onlineName" maxlength="18" autocomplete="off" placeholder="2–18 ký tự, vd: ShinV" />
+        </label>
+        <div class="online-actions">
+          <button id="findMatchBtn" class="btn primary" type="button">⚔ GHÉP TRẬN NGẪU NHIÊN</button>
+          <button id="cancelQueueBtn" class="btn ghost hidden" type="button">HỦY TÌM</button>
+          <button id="onlineBackBtn" class="btn ghost" type="button">QUAY LẠI</button>
+        </div>
+        <div id="queueStatus" class="queue-status">Nhập tên rồi bấm ghép trận.</div>
+        <div class="leaderboard-wrap">
+          <div class="leaderboard-head"><span>BẢNG XẾP HẠNG</span><span>THẮNG / THUA</span></div>
+          <ol id="leaderboardList" class="leaderboard-list"><li class="muted">Chưa có dữ liệu.</li></ol>
+        </div>
+      </div>
+    </section>
+
+    <section id="speakerModal" class="overlay hidden">
+      <div class="overlay-card speaker-card">
+        <span class="eyebrow">LOA QUÁN TGB • YOUTUBE</span>
+        <h2>Dán link YouTube vào loa.</h2>
+        <p>Hỗ trợ link <b>youtube.com/watch</b>, <b>youtu.be</b>, <b>shorts</b> hoặc <b>embed</b>. Loa sẽ phát ngay trong quán.</p>
+        <label class="online-field">
+          <span>URL YOUTUBE</span>
+          <input id="youtubeUrl" autocomplete="off" placeholder="https://www.youtube.com/watch?v=..." />
+        </label>
+        <div class="online-actions">
+          <button id="playYoutubeBtn" class="btn primary" type="button">▶ BẬT LOA</button>
+          <button id="stopYoutubeBtn" class="btn ghost" type="button">■ TẮT LOA</button>
+          <button id="speakerCloseBtn" class="btn ghost" type="button">ĐÓNG</button>
+        </div>
+        <div id="ytWrap" class="yt-wrap hidden">
+          <iframe id="ytFrame" title="Loa YouTube TGB Store" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        </div>
+        <small class="speaker-note">Nếu YouTube chặn nhúng, mở link trong tab mới. Không lưu link lên server.</small>
+      </div>
+    </section>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="chatFeed" class="chat-feed hidden" aria-live="polite"></div>
+    <div id="shout" class="shout hidden" aria-live="assertive"><span>TAO LÀ THẰNG BIẾN THÁI!!!</span></div>
+    <div id="subtitle" class="subtitle-bar hidden"></div>
+
+    <div id="mobileControls" class="hidden">
+      <div class="mobile-dpad" data-player="shinv">
+        <button data-dir="up">▲</button><button data-dir="left">◀</button><button data-dir="action">E</button><button data-dir="right">▶</button><button data-dir="down">▼</button>
+      </div>
+    </div>
+
+    <div id="rotateGate" aria-label="Xoay ngang điện thoại để chơi">
+      <div class="rotate-card">
+        <div class="rotate-icon">↻</div>
+        <h2>XOAY NGANG ĐIỆN THOẠI</h2>
+        <p>Bàn trắng 3×3 cần một màn hình ngang. Xoay máy rồi chơi tiếp — hoặc mở trên máy tính.</p>
+        <small>TGB STORE • XO CHAI</small>
+      </div>
+    </div>
+
+    <footer id="footbar">
+      <span>TGB STORE • GÓC BÀN TRẮNG</span>
+      <span id="footHint">Khách ế không phải lỗi của chai.</span>
+      <button id="footSound" type="button">♫ BẬT NHẠC</button>
+    </footer>
+  </div>
+
+  <script src="logic.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
