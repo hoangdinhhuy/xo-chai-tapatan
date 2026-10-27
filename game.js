@@ -1001,6 +1001,9 @@
     } else if (state.status === 'matchOver') {
       G.online.selected = null;
       dom.roundOverlay.classList.add('hidden');
+      if (state.reason === 'forfeit') {
+        showToast('Đối thủ rời trận giữa chừng — tính thắng.', 'good', 2800);
+      }
       if (!G.online.outroStarted) {
         G.online.outroStarted = true;
         stopOnlinePolling();

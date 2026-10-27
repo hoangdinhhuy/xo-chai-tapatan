@@ -140,6 +140,45 @@ function setDeadlineForTurn(room) {
 
 function updateRoom(room) {
   if (!room || !room.match) return;
+  // Nếu đối thủ out > 20s giữa trận -> xử thua (người còn lại thắng)
+  if (room.status === 'playing') {
+    const shinvToken = room.players.shinv?.token;
+    const brbToken = room.players.brb?.token;
+    const shinv = getToken(shinvToken);
+    const brb = getToken(brbToken);
+    const now = Date.now();
+    const shinvGone = !shinv || now - (shinv.lastSeen || 0) > 20000;
+    const brbGone = !brb || now - (brb.lastSeen || 0) > 20000;
+    if (shinvGone && !brbGone && brb) {
+      room.match.status = 'matchOver';
+      room.match.matchWinner = 'brb';
+      room.match.wins.brb = Math.max(room.match.wins.brb, 2);
+      room.match.wins.shinv = Math.min(room.match.wins.shinv, 1);
+      room.status = 'matchOver';
+      room.reason = 'forfeit';
+      room.deadline = null;
+      recordMatch(room);
+      room.ready.clear();
+      return;
+    }
+    if (brbGone && !shinvGone && shinv) {
+      room.match.status = 'matchOver';
+      room.match.matchWinner = 'shinv';
+      room.match.wins.shinv = Math.max(room.match.wins.shinv, 2);
+      room.match.wins.brb = Math.min(room.match.wins.brb, 1);
+      room.status = 'matchOver';
+      room.reason = 'forfeit';
+      room.deadline = null;
+      recordMatch(room);
+      room.ready.clear();
+      return;
+    }
+    if (shinvGone && brbGone) {
+      room.status = 'ended';
+      room.deadline = null;
+      return;
+    }
+  }
   if (room.status === 'playing' && room.deadline && Date.now() >= room.deadline) {
     const active = room.match.round.turn;
     const result = XO.applyTimeout(room.match, active);
@@ -265,7 +304,9 @@ function onlineApi(req, res, url) {
       const room = rooms.get(player.room);
       if (!room) return json(res, 200, { ok: true, status: 'ended', reason: 'left' });
       updateRoom(room);
-      return json(res, 200, { ok: true, state: roomSnapshot(room, token) });
+      const snap = roomSnapshot(room, token);
+      if (room.reason) snap.reason = room.reason;
+      return json(res, 200, { ok: true, state: snap });
     }
 
     if (action === 'action') {
