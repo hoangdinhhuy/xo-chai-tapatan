@@ -11,7 +11,8 @@ const XO = require('./logic.js');
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4173);
 const HOST = process.env.HOST || '0.0.0.0';
-const DATA_FILE = path.join(ROOT, 'leaderboard.json');
+const LB_PATH = process.env.LEADERBOARD_PATH || path.join(ROOT, 'leaderboard.json');
+const DATA_FILE = LB_PATH;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',

@@ -5,6 +5,7 @@
   "description": "XO CHAI — game 2D pixel 1v1 tại TGB Store, BO3, thua cởi đồ chạy ra đường.",
   "scripts": {
     "start": "node server.mjs",
+    "dev": "node server.mjs",
     "test": "node --test tests/logic.test.mjs"
   }
 }
