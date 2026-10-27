@@ -69,7 +69,8 @@
 
     <div id="turnBanner" class="hidden" aria-live="polite">
       <span id="turnEyebrow">LƯỢT</span>
-      <div class="turn-title-row"><strong id="turnTitle">SHINV</strong><span id="turnClock" class="turn-clock hidden">3.0</span></div>
+      <div class="turn-title-row"><strong id="turnTitle">SHINV</strong></div>
+      <div id="turnClock" class="turn-clock hidden">3.0</div>
       <span id="turnHint">Chọn ô trống để đặt chai</span>
     </div>
 
@@ -85,16 +86,24 @@
     </aside>
 
     <div id="cockpit" class="hidden">
-      <div class="control-pill p1-pill">
+      <div class="control-pill p1-pill" id="p1Pill">
         <span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span>
         <b>DI CHUYỂN</b>
         <span class="keycap wide">E</span><b>CHỌN / ĐẶT</b>
       </div>
       <div id="contextHint" class="context-hint">Chọn một ô trống trên bàn.</div>
-      <div class="control-pill p2-pill">
+      <div class="control-pill p2-pill" id="p2Pill">
         <span class="keycap">↑</span><span class="keycap">←</span><span class="keycap">↓</span><span class="keycap">→</span>
         <b>DI CHUYỂN</b>
         <span class="keycap wide">ENTER</span><b>CHỌN / ĐẶT</b>
+      </div>
+      <div class="control-pill online-pill hidden" id="onlinePill">
+        <span class="keycap">W</span><span class="keycap">A</span><span class="keycap">S</span><span class="keycap">D</span>
+        <b>/</b>
+        <span class="keycap">↑</span><span class="keycap">←</span><span class="keycap">↓</span><span class="keycap">→</span>
+        <b>DI CHUYỂN</b>
+        <span class="keycap wide">E / ENTER</span><b>CHỌN / ĐẶT</b>
+        <span class="keycap wide">Q / BACK</span><b>BỎ CHỌN</b>
       </div>
     </div>
 

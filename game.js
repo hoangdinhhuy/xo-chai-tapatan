@@ -49,6 +49,9 @@
     ruleToggle: $('ruleToggle'),
     ruleBody: $('ruleBody'),
     cockpit: $('cockpit'),
+    p1Pill: $('p1Pill'),
+    p2Pill: $('p2Pill'),
+    onlinePill: $('onlinePill'),
     contextHint: $('contextHint'),
     inventory: $('inventory'),
     invShinv: $('invShinv'),
@@ -144,7 +147,11 @@
       ended: false,
       outroStarted: false,
       resultShown: false,
-      clock: null
+      clock: null,
+      fxTimer: null,
+      overlayTimer: null,
+      outroTimer: null,
+      lastFxSig: null
     },
     sound: true,
     music: true,
@@ -543,6 +550,12 @@
     });
   }
 
+  function setOnlineControls(on) {
+    dom.p1Pill.classList.toggle('hidden', on);
+    dom.p2Pill.classList.toggle('hidden', on);
+    dom.onlinePill.classList.toggle('hidden', !on);
+  }
+
   function setTopStatus(str) {
     dom.statusText.textContent = str;
   }
@@ -837,6 +850,16 @@
 
   async function leaveOnline(notify = true) {
     stopOnlinePolling();
+    clearTimeout(G.online.fxTimer);
+    clearTimeout(G.online.overlayTimer);
+    clearTimeout(G.online.outroTimer);
+    G.online.fxTimer = null;
+    G.online.overlayTimer = null;
+    G.online.outroTimer = null;
+    G.anim = null;
+    G.winFx = null;
+    G.confetti = [];
+    G.floaters = [];
     const token = G.online.token;
     if (notify && token) {
       try { await onlineFetch('/api/online/leave', { token }); } catch { /* server có thể đã tắt */ }
@@ -902,6 +925,7 @@
   }
 
   function enterOnlineMatch(state) {
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     clearInterval(G.online.clock);
     dom.onlineLobby.classList.add('hidden');
     dom.startScreen.classList.add('hidden');
@@ -918,9 +942,21 @@
     G.online.state = state;
     G.online.outroStarted = false;
     G.online.resultShown = false;
+    G.online.ended = false;
+    G.online.sending = false;
+    G.online.selected = null;
+    G.online.lastFxSig = `${state.match.round.roundNo}:${state.match.round.moves}:${state.status}`;
+    clearTimeout(G.online.fxTimer);
+    clearTimeout(G.online.overlayTimer);
+    clearTimeout(G.online.outroTimer);
+    G.anim = null;
+    G.winFx = null;
+    G.confetti = [];
+    G.floaters = [];
     G.match = state.match;
     G.cursors[state.you] = firstOnlineCursor(state.you);
     G.locked = false;
+    setOnlineControls(true);
     clearMoveClock();
     setHudVisible(true);
     refreshHUD();
@@ -952,10 +988,80 @@
         return;
       }
       const left = Math.max(0, (state.turnEndsAt - Date.now()) / 1000);
+      // Server cộng 450ms bù animation; hiển thị tối đa 3.0 như local.
+      const shown = Math.min(3, left);
       dom.turnClock.classList.remove('hidden');
-      dom.turnClock.textContent = left >= 2 ? Math.ceil(left).toFixed(0) : left.toFixed(1);
-      dom.turnClock.classList.toggle('danger', left <= 1);
+      dom.turnClock.textContent = shown >= 2 ? Math.ceil(shown).toFixed(0) : shown.toFixed(1);
+      dom.turnClock.classList.toggle('danger', shown <= 1);
     }, 80);
+  }
+
+  function onlineRoundDiff(prev, next) {
+    if (!prev || !next || next.moves <= prev.moves) return null;
+    const changed = [];
+    for (let i = 0; i < 9; i++) {
+      if ((prev.board[i] || null) !== (next.board[i] || null)) changed.push(i);
+    }
+    if (changed.length === 1) {
+      const to = changed[0];
+      if (next.board[to]) return { type: 'place', player: next.board[to], to };
+    }
+    if (changed.length === 2) {
+      const from = changed.find((i) => prev.board[i] && !next.board[i]);
+      const to = changed.find((i) => !prev.board[i] && next.board[i]);
+      if (from !== undefined && to !== undefined) {
+        return { type: 'move', player: next.board[to], from, to };
+      }
+    }
+    return null;
+  }
+
+  function playOnlineActionFx(diff, state) {
+    const now = performance.now();
+    const player = diff.player;
+    const from = diff.type === 'move'
+      ? cellRect(diff.from)
+      : { cx: player === 'shinv' ? 560 : 720, cy: player === 'shinv' ? 760 : 150 };
+    const to = cellRect(diff.to);
+    G.anim = {
+      start: now,
+      duration: 360,
+      player,
+      type: diff.type,
+      from,
+      to
+    };
+    G.locked = true;
+    G.shake = state.status === 'playing' ? 3 : 7;
+    spawnDust(to.cx, to.cy, player === 'shinv' ? '#f0a15a' : '#b8a7ff', 9);
+    addFloater(diff.type === 'move' ? 'NHẤC!' : 'ĐẶT!', to.cx, to.cy - 30, pcolor(player));
+    const line = state.match?.round?.winLine;
+    if (line && (state.status === 'roundOver' || state.status === 'matchOver')) {
+      G.winFx = { start: now, line, player };
+      spawnConfetti(state.status === 'matchOver' ? 110 : 80);
+      Sound.sfx('win');
+    } else {
+      Sound.sfx(diff.type === 'move' ? 'move' : 'place');
+    }
+    clearTimeout(G.online.fxTimer);
+    G.online.fxTimer = setTimeout(() => {
+      G.anim = null;
+      if (G.match?.status === 'playing') {
+        G.locked = false;
+        ensureCursorValid(G.online.you);
+        refreshHUD();
+        startOnlineClock();
+      }
+    }, 440);
+  }
+
+  function scheduleOnlineRoundOverlay(state) {
+    clearTimeout(G.online.overlayTimer);
+    const delay = G.anim ? 700 : 450;
+    G.online.overlayTimer = setTimeout(() => {
+      if (!G.online.active || G.match?.status !== 'roundOver') return;
+      showOnlineRoundOverlay(G.online.state || state);
+    }, delay);
   }
 
   function applyOnlineState(state) {
@@ -973,6 +1079,26 @@
       enterOnlineMatch(state);
       return;
     }
+
+    const prevMatch = G.match;
+    const prevRound = prevMatch?.round;
+    const nextRound = state.match?.round;
+    const roundChanged = !!(prevRound && nextRound && prevRound.roundNo !== nextRound.roundNo);
+    const diff = prevRound && nextRound && !roundChanged
+      ? onlineRoundDiff(prevRound, nextRound)
+      : null;
+
+    if (roundChanged) {
+      clearTimeout(G.online.fxTimer);
+      clearTimeout(G.online.overlayTimer);
+      G.anim = null;
+      G.winFx = null;
+      G.confetti = [];
+      G.particles = [];
+      G.online.lastFxSig = null;
+      G.online.selected = null;
+    }
+
     G.match = state.match;
     G.online.you = state.you;
     if (G.online.selected !== null) {
@@ -983,31 +1109,55 @@
         G.online.selected = null;
       }
     }
+
+    if (diff) {
+      const sig = `${nextRound.roundNo}:${nextRound.moves}:${state.status}`;
+      if (G.online.lastFxSig !== sig) {
+        G.online.lastFxSig = sig;
+        playOnlineActionFx(diff, state);
+      }
+    }
+
     if (state.status === 'playing') {
       dom.roundOverlay.classList.add('hidden');
       dom.nextRoundBtn.disabled = false;
+      if (G.anim) {
+        G.locked = true;
+        refreshHUD();
+        startOnlineClock();
+        return;
+      }
       G.locked = false;
       ensureCursorValid(state.you);
       refreshHUD();
       startOnlineClock();
       return;
     }
+
     clearMoveClock();
     G.locked = true;
     if (state.status === 'roundOver') G.online.selected = null;
     refreshHUD();
     if (state.status === 'roundOver') {
-      showOnlineRoundOverlay(state);
+      scheduleOnlineRoundOverlay(state);
     } else if (state.status === 'matchOver') {
       G.online.selected = null;
       dom.roundOverlay.classList.add('hidden');
       if (state.reason === 'forfeit') {
-        showToast('Đối thủ rời trận giữa chừng — tính thắng.', 'good', 2800);
+        showToast('Đối thủ bỏ cuộc hoặc mất kết nối — bạn thắng trận.', 'good', 3000);
       }
       if (!G.online.outroStarted) {
         G.online.outroStarted = true;
         stopOnlinePolling();
-        startOutro();
+        const delay = G.anim ? 900 : 500;
+        clearTimeout(G.online.outroTimer);
+        G.online.outroTimer = setTimeout(() => {
+          if (!G.online.active) return;
+          showOnlineMatchOverlay(G.online.state || state);
+          G.online.outroTimer = setTimeout(() => {
+            if (G.online.active) startOutro();
+          }, 5200);
+        }, delay);
       }
     }
   }
@@ -1027,9 +1177,37 @@
         : reason === 'repeat'
           ? `${pname(loser)} lặp nước quá 3 lần.`
           : `Ba chai ${META[winner]?.bottle || ''} thẳng hàng.`;
+    const autoLeft = state.roundEndsAt
+      ? Math.max(0, Math.ceil((state.roundEndsAt - Date.now()) / 1000))
+      : 0;
+    if (autoLeft > 0) {
+      dom.roundSub.textContent += ` Tự động sang ván sau sau ${autoLeft}s.`;
+    }
     dom.roundScore.textContent = `${m.wins['shinv']} — ${m.wins.brb}`;
-    dom.nextRoundBtn.textContent = state.readyYou ? 'ĐANG CHỜ ĐỐI THỦ...' : 'SẴN SÀNG VÁN TIẾP ▶';
+    dom.nextRoundBtn.textContent = state.readyYou ? 'ĐANG CHỜ ĐỐI THỦ...' : 'SẴN SÀNG NGAY ▶';
     dom.nextRoundBtn.disabled = !!state.readyYou;
+  }
+
+  function showOnlineMatchOverlay(state) {
+    const m = state.match;
+    const winner = m.matchWinner;
+    const loser = XO.other(winner);
+    const reason = state.reason || m.round?.winReason || 'line';
+    dom.roundOverlay.classList.remove('hidden');
+    dom.roundEyebrow.textContent = 'ONLINE • KẾT THÚC BO3';
+    dom.roundTitle.textContent = winner === state.you ? 'BẠN THẮNG BO3!' : 'BẠN THUA BO3.';
+    dom.roundSub.textContent = reason === 'forfeit'
+      ? 'Trận kết thúc do một bên bỏ cuộc hoặc mất kết nối. Người còn lại được xử thắng.'
+      : reason === 'timeout'
+        ? `${pname(loser)} hết 3 giây ở lượt quyết định.`
+        : reason === 'stalemate'
+          ? `${pname(loser)} bị khóa đường.`
+          : reason === 'repeat'
+            ? `${pname(loser)} lặp nước quá 3 lần.`
+            : `Ba chai ${META[winner]?.bottle || ''} thẳng hàng.`;
+    dom.roundScore.textContent = `${m.wins.shinv} — ${m.wins.brb}`;
+    dom.nextRoundBtn.textContent = 'XEM HÌNH PHẠT ▶';
+    dom.nextRoundBtn.disabled = false;
   }
 
   async function sendReadyOnline() {
@@ -1061,6 +1239,7 @@
       G.online.selected = cell;
       round.selected = cell;
       Sound.sfx('select');
+      showToast(`Bạn nhấc chai ${cellName(cell)} lên.`, 'good', 1300);
       refreshHUD();
       return;
     } else if (cell === G.online.selected) {
@@ -1073,6 +1252,7 @@
       G.online.selected = cell;
       round.selected = cell;
       Sound.sfx('select');
+      showToast(`Bạn nhấc chai ${cellName(cell)} lên.`, 'good', 1300);
       refreshHUD();
       return;
     } else {
@@ -1294,6 +1474,7 @@
     dom.subtitle.classList.add('hidden');
     dom.skipBtn.classList.add('hidden');
     setHudVisible(true);
+    setOnlineControls(false);
     setTopStatus('ĐANG ĐẤU • VÁN 1 • 0-0');
     ensureCursorValid('shinv');
     refreshHUD();
@@ -1525,6 +1706,8 @@
 
   function startOutro() {
     if (!G.match?.matchWinner) return;
+    if (G.mode === 'outro') return;
+    clearTimeout(G.online.outroTimer);
     clearTimeout(G.autoNextTimer);
     clearTimeout(G.outroTimer);
     clearMoveClock();
@@ -1534,6 +1717,7 @@
     G.winFx = null;
     G.particles = [];
     G.confetti = [];
+    G.floaters = [];
     dom.roundOverlay.classList.add('hidden');
     dom.resultOverlay.classList.add('hidden');
     dom.dialogBox.classList.add('hidden');
@@ -1645,6 +1829,7 @@
     dom.subtitle.classList.add('hidden');
     dom.skipBtn.classList.add('hidden');
     setHudVisible(false);
+    setOnlineControls(false);
     setTopStatus('KHÁCH Ế • 0 KHÁCH');
     dom.footHint.textContent = 'Khách ế không phải lỗi của chai.';
     Sound.startMusic();
@@ -2534,8 +2719,16 @@
       else if (G.mode === 'outro') finishOutro();
     });
     dom.nextRoundBtn.addEventListener('click', () => {
-      if (G.online.active) sendReadyOnline();
-      else proceedFromRound();
+      if (G.online.active) {
+        if (G.match?.status === 'matchOver') {
+          clearTimeout(G.online.outroTimer);
+          startOutro();
+        } else {
+          sendReadyOnline();
+        }
+      } else {
+        proceedFromRound();
+      }
     });
     dom.rematchBtn.addEventListener('click', async () => {
       if (G.online.active) {
@@ -2612,13 +2805,32 @@
       if (G.mode === 'game') {
         if (G.match && G.match.status !== 'playing') {
           if (k === 'enter' || k === ' ') {
-            if (G.online.active) sendReadyOnline();
-            else proceedFromRound();
+            if (G.online.active) {
+              if (G.match.status === 'matchOver') {
+                clearTimeout(G.online.outroTimer);
+                startOutro();
+              } else {
+                sendReadyOnline();
+              }
+            } else {
+              proceedFromRound();
+            }
           }
           return;
         }
         if (k === 'h') { openHelp(); return; }
         if (G.locked || !G.match) return;
+        if (G.online.active) {
+          const me = G.online.you;
+          if (!me) return;
+          if (k === 'w' || k === 'arrowup') moveCursor(me, 0, -1);
+          else if (k === 's' || k === 'arrowdown') moveCursor(me, 0, 1);
+          else if (k === 'a' || k === 'arrowleft') moveCursor(me, -1, 0);
+          else if (k === 'd' || k === 'arrowright') moveCursor(me, 1, 0);
+          else if (k === 'e' || k === 'enter') pressAction(me);
+          else if (k === 'q' || k === 'backspace') cancelSelection(me);
+          return;
+        }
         const turn = G.match.round.turn;
         if (turn === 'shinv') {
           if (k === 'w') moveCursor('shinv', 0, -1);

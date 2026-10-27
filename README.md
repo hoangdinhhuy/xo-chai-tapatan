@@ -17,13 +17,7 @@ Mở: **http://127.0.0.1:4173**
 
 Không cần cài dependency.
 
-Chơi trên điện thoại cùng Wi-Fi:
-
-```powershell
-$env:HOST = "0.0.0.0"
-npm start
-# mở http://<IP-máy-tính>:4173
-```
+Server mặc định mở `0.0.0.0`, nên máy khác trong LAN có thể vào `http://<IP-máy-tính>:4173`.
 
 Điện thoại xoay ngang. Nếu Windows Firewall hỏi, cho phép Node.js trên mạng riêng.
 
@@ -37,6 +31,8 @@ Test online bằng 2 tab: mở 2 tab, bấm **TÌM TRẬN ONLINE**, nhập 2 tê
 | P2 — BRB | `↑ ↓ ← →` | `Enter` | `Backspace` |
 
 Có thể bấm/chạm trực tiếp vào ô. `H` mở luật. `⏭` bỏ qua movie. `📻` mở loa YouTube.
+
+Khi chơi online, mỗi người điều khiển được bằng **cả hai bộ phím**: `WASD + E/Q` hoặc `↑↓←→ + Enter/Backspace` — không phụ thuộc bạn được xếp là ShinV hay BRB.
 
 ## Luật Tapatan
 
@@ -63,6 +59,9 @@ Bấm **BẬT LOA**. Game tắt nhạc nền để nhường chỗ cho YouTube. 
 
 - Server giữ phòng trong RAM, ghép 2 người đang chờ.
 - Server xử lý luật, thời gian 3 giây, khóa đường, lặp nước và BO3.
+- **Gameplay, animation, âm thanh, hiệu ứng giống local**: đặt/nhấc chai có animation, bụi, chữ bay, rung màn hình, âm thanh; thắng bằng hàng 3 có win-line + confetti.
+- Sau mỗi ván, hai bên tự động sang ván tiếp sau **6 giây** (bấm sẵn sàng để sang ngay), giống nhịp local.
+- **Bỏ cuộc / mất kết nối**: rời trận giữa chừng hoặc không phản hồi **3 lượt × 5 giây = 15 giây** thì người còn lại thắng trận; kết quả vẫn ghi BXH.
 - BXH lưu `leaderboard.json`: tên, thắng, thua, số trận. **Không có mật khẩu.**
 - Người chơi nhận token phiên tạm trong RAM; tải lại trang phải tìm trận lại.
 - Phù hợp để test trên server riêng. Nếu deploy public, nên thêm rate-limit, HTTPS/reverse proxy và dọn phòng cũ.

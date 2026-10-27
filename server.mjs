@@ -13,6 +13,10 @@ const PORT = Number(process.env.PORT || 4173);
 const HOST = process.env.HOST || '0.0.0.0';
 const LB_PATH = process.env.LEADERBOARD_PATH || path.join(ROOT, 'leaderboard.json');
 const DATA_FILE = LB_PATH;
+const MOVE_TIMER_MS = 3000;
+const MOVE_ANIM_GRACE_MS = 450;
+const AFK_LIMIT_MS = 15000; // 3 lượt × 5 giây không phản hồi
+const ROUND_AUTO_NEXT_MS = 6000;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -124,6 +128,7 @@ function roomSnapshot(room, token) {
     opponentName: (room.players[opponent] || room.players[you])?.name || 'Đối thủ',
     match: room.match,
     turnEndsAt: room.deadline,
+    roundEndsAt: room.roundEndsAt || null,
     readyYou: room.ready.has(you),
     readyOpponent: room.ready.has(opponent),
     reason: room.reason || null
@@ -135,65 +140,93 @@ function setDeadlineForTurn(room) {
     room.deadline = null;
     return;
   }
-  room.deadline = XO.currentPhase(room.match) === 'move' ? Date.now() + 3000 : null;
+  // Cộng thêm 450ms animation để người chơi online có đủ 3 giây thực sự,
+  // giống local (local bắt đầu đếm sau khi animation đặt/nhấc chai chạy xong).
+  room.deadline = XO.currentPhase(room.match) === 'move'
+    ? Date.now() + MOVE_TIMER_MS + MOVE_ANIM_GRACE_MS
+    : null;
+}
+
+function awardForfeit(room, winnerSide, reason = 'forfeit') {
+  if (!room || !room.match || room.recorded) return false;
+  if (room.match.status === 'matchOver') return false;
+  const loserSide = XO.other(winnerSide);
+  room.match.status = 'matchOver';
+  room.match.matchWinner = winnerSide;
+  room.match.wins[winnerSide] = Math.max(2, room.match.wins[winnerSide] || 0);
+  room.match.wins[loserSide] = Math.min(1, room.match.wins[loserSide] || 0);
+  if (room.match.round) {
+    room.match.round.winner = winnerSide;
+    room.match.round.winReason = reason;
+  }
+  room.status = 'matchOver';
+  room.reason = reason;
+  room.deadline = null;
+  room.roundEndsAt = null;
+  room.ready.clear();
+  recordMatch(room);
+  return true;
 }
 
 function updateRoom(room) {
   if (!room || !room.match) return;
-  // Nếu đối thủ out > 20s giữa trận -> xử thua (người còn lại thắng)
-  if (room.status === 'playing') {
-    const shinvToken = room.players.shinv?.token;
-    const brbToken = room.players.brb?.token;
-    const shinv = getToken(shinvToken);
-    const brb = getToken(brbToken);
-    const now = Date.now();
-    const shinvGone = !shinv || now - (shinv.lastSeen || 0) > 20000;
-    const brbGone = !brb || now - (brb.lastSeen || 0) > 20000;
-    if (shinvGone && !brbGone && brb) {
-      room.match.status = 'matchOver';
-      room.match.matchWinner = 'brb';
-      room.match.wins.brb = Math.max(room.match.wins.brb, 2);
-      room.match.wins.shinv = Math.min(room.match.wins.shinv, 1);
-      room.status = 'matchOver';
-      room.reason = 'forfeit';
-      room.deadline = null;
-      recordMatch(room);
-      room.ready.clear();
-      return;
-    }
-    if (brbGone && !shinvGone && shinv) {
-      room.match.status = 'matchOver';
-      room.match.matchWinner = 'shinv';
-      room.match.wins.shinv = Math.max(room.match.wins.shinv, 2);
-      room.match.wins.brb = Math.min(room.match.wins.brb, 1);
-      room.status = 'matchOver';
-      room.reason = 'forfeit';
-      room.deadline = null;
-      recordMatch(room);
-      room.ready.clear();
-      return;
-    }
+  const now = Date.now();
+
+  // Bỏ cuộc / mất kết nối: 3 lượt × 5 giây = 15 giây không phản hồi -> xử thua.
+  if (room.status === 'playing' || room.status === 'roundOver') {
+    const shinv = getToken(room.players.shinv?.token);
+    const brb = getToken(room.players.brb?.token);
+    const shinvGone = !shinv || now - (shinv.lastSeen || 0) > AFK_LIMIT_MS;
+    const brbGone = !brb || now - (brb.lastSeen || 0) > AFK_LIMIT_MS;
     if (shinvGone && brbGone) {
       room.status = 'ended';
       room.deadline = null;
+      room.roundEndsAt = null;
+      return;
+    }
+    if (shinvGone) {
+      awardForfeit(room, 'brb', 'forfeit');
+      return;
+    }
+    if (brbGone) {
+      awardForfeit(room, 'shinv', 'forfeit');
       return;
     }
   }
-  if (room.status === 'playing' && room.deadline && Date.now() >= room.deadline) {
+
+  // Giống local: tự sang ván tiếp sau 6 giây, không bắt buộc bấm sẵn sàng.
+  if (room.status === 'roundOver' && room.roundEndsAt && now >= room.roundEndsAt) {
+    const next = XO.nextRound(room.match);
+    if (next.ok) {
+      room.status = 'playing';
+      room.reason = null;
+      room.ready.clear();
+      room.roundEndsAt = null;
+      setDeadlineForTurn(room);
+    }
+  }
+
+  if (room.status === 'playing' && room.deadline && now >= room.deadline) {
     const active = room.match.round.turn;
     const result = XO.applyTimeout(room.match, active);
     if (result.ok) {
       room.status = room.match.status;
       room.reason = 'timeout';
       room.deadline = null;
-      if (room.match.status === 'matchOver') recordMatch(room);
       room.ready.clear();
+      if (room.match.status === 'roundOver') {
+        room.roundEndsAt = Date.now() + ROUND_AUTO_NEXT_MS;
+      }
+      if (room.match.status === 'matchOver') {
+        room.roundEndsAt = null;
+        recordMatch(room);
+      }
     }
   }
   if (room.status === 'playing' && XO.currentPhase(room.match) === 'move' && !room.deadline) {
-    room.deadline = Date.now() + 3000;
+    setDeadlineForTurn(room);
   }
-  if (room.status !== 'playing') room.deadline = null;
+  if (room.status !== 'playing' && room.status !== 'roundOver') room.deadline = null;
 }
 
 function json(res, status, payload) {
@@ -338,6 +371,11 @@ function onlineApi(req, res, url) {
       }
       room.status = room.match.status;
       room.reason = room.match.round.winReason;
+      if (room.status === 'roundOver') {
+        room.roundEndsAt = Date.now() + ROUND_AUTO_NEXT_MS;
+      } else {
+        room.roundEndsAt = null;
+      }
       setDeadlineForTurn(room);
       if (room.match.status === 'matchOver') {
         room.deadline = null;
@@ -360,6 +398,7 @@ function onlineApi(req, res, url) {
           if (next.ok) {
             room.status = 'playing';
             room.reason = null;
+            room.roundEndsAt = null;
             setDeadlineForTurn(room);
           }
         }
@@ -373,15 +412,27 @@ function onlineApi(req, res, url) {
       if (player.room) {
         const room = rooms.get(player.room);
         if (room) {
-          const otherSide = XO.other(player.side);
-          const otherToken = room.players[otherSide]?.token;
-          if (otherToken && getToken(otherToken)) {
-            const other = getToken(otherToken);
-            other.room = null;
-            other.side = null;
-            other.queued = false;
+          if (room.status === 'playing' || room.status === 'roundOver') {
+            // Bỏ cuộc giữa chừng: người ở lại thắng, giữ phòng để họ nhận kết quả.
+            awardForfeit(room, XO.other(player.side), 'forfeit');
+            room.departed = room.departed || new Set();
+            room.departed.add(player.side);
+          } else if (room.status === 'matchOver') {
+            // Giữ phòng thêm một lúc để người còn lại kịp nhận kết quả cuối.
+            room.departed = room.departed || new Set();
+            room.departed.add(player.side);
+            if (room.departed.size >= 2) rooms.delete(room.id);
+          } else {
+            const otherSide = XO.other(player.side);
+            const otherToken = room.players[otherSide]?.token;
+            if (otherToken && getToken(otherToken)) {
+              const other = getToken(otherToken);
+              other.room = null;
+              other.side = null;
+              other.queued = false;
+            }
+            rooms.delete(room.id);
           }
-          rooms.delete(room.id);
         }
       }
       player.room = null;
